@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alien Intercept</title>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101521;
+      --ink: #e7edf7;
+      --muted: #9da9bd;
+      --line: rgba(231, 237, 247, 0.16);
+      --panel: rgba(14, 21, 34, 0.92);
+      --accent: #36c2a5;
+      --accent-2: #f3b14b;
+      --danger: #ef6461;
+      --blue: #6ea8fe;
+      --ship: #f4f7fb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    .game-shell {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #101521;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #101521;
+    }
+
+    .dom-overlay-mode #gameCanvas {
+      position: absolute;
+      inset: 0;
+    }
+
+    .hud {
+      width: min(360px, calc(100vw - 24px));
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      transform-origin: 0 0;
+      backdrop-filter: blur(10px);
+    }
+
+    .dom-overlay-mode .hud {
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 3;
+    }
+
+    .hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .hud h1 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.1;
+    }
+
+    .api-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border: 1px solid rgba(54, 194, 165, 0.34);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .api-pill.fallback {
+      border-color: rgba(243, 177, 75, 0.34);
+      color: var(--accent-2);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 2px;
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .mission {
+      display: grid;
+      gap: 8px;
+      min-height: 106px;
+      padding: 10px;
+      border: 1px solid rgba(110, 168, 254, 0.22);
+      border-radius: 7px;
+      background: rgba(110, 168, 254, 0.08);
+    }
+
+    .mission strong {
+      color: var(--ink);
+    }
+
+    .mission small {
+      color: var(--muted);
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 7px;
+      border: 1px solid rgba(231, 237, 247, 0.18);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .hud-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .hud button {
+      height: 34px;
+      border: 1px solid rgba(231, 237, 247, 0.18);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .hud button:hover {
+      border-color: rgba(231, 237, 247, 0.32);
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    .hud button.primary {
+      border-color: rgba(54, 194, 165, 0.55);
+      background: rgba(54, 194, 165, 0.18);
+      color: #c9fff3;
+    }
+
+    .note {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .center-card {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 4;
+      width: min(440px, calc(100vw - 28px));
+      padding: 18px;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(12, 18, 29, 0.92);
+      color: var(--ink);
+      box-shadow: 0 20px 70px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(12px);
+    }
+
+    .center-card.hidden {
+      display: none;
+    }
+
+    .center-card h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .center-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .center-card button {
+      width: 100%;
+      height: 40px;
+      border: 1px solid rgba(54, 194, 165, 0.5);
+      border-radius: 7px;
+      background: rgba(54, 194, 165, 0.18);
+      color: #c9fff3;
+      cursor: pointer;
+    }
+
+    .mobile-controls {
+      position: absolute;
+      inset: auto 14px 14px 14px;
+      z-index: 4;
+      display: none;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .pad,
+    .fire {
+      display: grid;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .pad {
+      grid-template-columns: repeat(3, 44px);
+      grid-template-rows: repeat(3, 44px);
+    }
+
+    .pad button,
+    .fire button {
+      border: 1px solid rgba(231, 237, 247, 0.18);
+      border-radius: 8px;
+      background: rgba(14, 21, 34, 0.72);
+      color: var(--ink);
+      backdrop-filter: blur(8px);
+    }
+
+    .pad [data-key="up"] {
+      grid-column: 2;
+    }
+
+    .pad [data-key="left"] {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    .pad [data-key="down"] {
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .pad [data-key="right"] {
+      grid-column: 3;
+      grid-row: 2;
+    }
+
+    .fire {
+      align-content: end;
+    }
+
+    .fire button {
+      width: 78px;
+      height: 78px;
+      border-radius: 999px;
+      border-color: rgba(243, 177, 75, 0.42);
+      color: #ffe3b5;
+    }
+
+    @media (max-width: 760px) {
+      .hud {
+        width: min(320px, calc(100vw - 20px));
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .mobile-controls {
+        display: flex;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="gameShell" class="game-shell">
+    <canvas id="gameCanvas" width="1280" height="720" layoutsubtree="true">
+      <section id="hud" class="hud" aria-label="Game HUD">
+        <div class="hud-top">
+          <h1>Alien Intercept</h1>
+          <span id="apiMode" class="api-pill">Canvas DOM</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><span>Score</span><strong id="scoreText">0</strong></div>
+          <div class="stat"><span>Wave</span><strong id="waveText">1</strong></div>
+          <div class="stat"><span>Hull</span><strong id="hullText">100</strong></div>
+          <div class="stat"><span>Charge</span><strong id="chargeText">100</strong></div>
+        </div>
+        <div id="missionPanel" class="mission">
+          <strong>First contact</strong>
+          <small>Local mission panel. Press Launch, then use WASD or arrows to move and Space to fire.</small>
+          <div class="tag-row">
+            <span class="tag">htmx ready</span>
+            <span class="tag">Pretext radio</span>
+          </div>
+        </div>
+        <div class="hud-actions">
+          <button class="primary" type="button" id="startButton">Launch</button>
+          <button type="button" id="pauseButton">Pause</button>
+          <button type="button" id="resetButton">Reset</button>
+        </div>
+        <div class="hud-actions">
+          <button type="button" hx-get="alien-shooter-fragments/briefing.html" hx-target="#missionPanel" hx-swap="outerHTML">Brief</button>
+          <button type="button" hx-get="alien-shooter-fragments/upgrade.html" hx-target="#missionPanel" hx-swap="outerHTML">Upgrade</button>
+          <button type="button" hx-get="alien-shooter-fragments/distress.html" hx-target="#missionPanel" hx-swap="outerHTML">Distress</button>
+        </div>
+        <p class="note">WASD or arrows move. Space fires. P pauses.</p>
+      </section>
+    </canvas>
+
+    <section id="startOverlay" class="center-card">
+      <h2>Hold the line</h2>
+      <p>Destroy incoming ships before they cross the lower boundary. The HUD is real HTML; htmx swaps its mission panel; Pretext draws the radio text on the canvas.</p>
+      <button type="button" id="overlayStart">Launch</button>
+    </section>
+
+    <div class="mobile-controls" aria-label="Touch controls">
+      <div class="pad">
+        <button type="button" data-key="up">W</button>
+        <button type="button" data-key="left">A</button>
+        <button type="button" data-key="down">S</button>
+        <button type="button" data-key="right">D</button>
+      </div>
+      <div class="fire">
+        <button type="button" data-key="fire">Fire</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const shell = document.getElementById("gameShell");
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const hud = document.getElementById("hud");
+    const apiMode = document.getElementById("apiMode");
+    const startOverlay = document.getElementById("startOverlay");
+
+    const ui = {
+      score: document.getElementById("scoreText"),
+      wave: document.getElementById("waveText"),
+      hull: document.getElementById("hullText"),
+      charge: document.getElementById("chargeText"),
+      start: document.getElementById("startButton"),
+      pause: document.getElementById("pauseButton"),
+      reset: document.getElementById("resetButton"),
+      overlayStart: document.getElementById("overlayStart")
+    };
+
+    const supportsDrawElement = typeof ctx.drawElementImage === "function" && typeof canvas.requestPaint === "function";
+    let useDrawElement = supportsDrawElement;
+
+    const game = {
+      running: false,
+      paused: false,
+      over: false,
+      score: 0,
+      wave: 1,
+      hull: 100,
+      charge: 100,
+      lastShot: 0,
+      spawnTimer: 0,
+      radioTimer: 0,
+      radioText: "Command: Intercept the incoming formation. Keep the lower boundary clear.",
+      player: { x: 640, y: 600, vx: 0, vy: 0, r: 18 },
+      bullets: [],
+      aliens: [],
+      particles: [],
+      stars: []
+    };
+
+    const keys = {
+      left: false,
+      right: false,
+      up: false,
+      down: false,
+      fire: false
+    };
+
+    let pretextApi = null;
+    let lastTime = performance.now();
+
+    function resizeCanvas() {
+      const rect = shell.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * ratio);
+      canvas.height = Math.floor(rect.height * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+      if (!game.stars.length) {
+        seedStars(rect.width, rect.height);
+      }
+      syncHudTransform();
+      requestPaint();
+    }
+
+    function seedStars(width, height) {
+      game.stars = Array.from({ length: 140 }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        speed: 20 + Math.random() * 90,
+        size: 0.6 + Math.random() * 1.8,
+        alpha: 0.35 + Math.random() * 0.55
+      }));
+    }
+
+    async function loadPretext() {
+      try {
+        pretextApi = await import("https://esm.sh/@chenglou/pretext@latest");
+      } catch (error) {
+        console.warn("Pretext unavailable; using canvas text wrapping.", error);
+      }
+      requestPaint();
+    }
+
+    function syncHudTransform(transform) {
+      if (useDrawElement && transform) {
+        hud.style.transform = transform.toString();
+        return;
+      }
+
+      if (!useDrawElement) {
+        hud.style.transform = "translate(16px, 16px)";
+      }
+    }
+
+    function requestPaint() {
+      if (useDrawElement) {
+        canvas.requestPaint();
+      } else {
+        window.requestAnimationFrame(paint);
+      }
+    }
+
+    function resetGame() {
+      const rect = shell.getBoundingClientRect();
+      game.running = false;
+      game.paused = false;
+      game.over = false;
+      game.score = 0;
+      game.wave = 1;
+      game.hull = 100;
+      game.charge = 100;
+      game.lastShot = 0;
+      game.spawnTimer = 0;
+      game.radioTimer = 0;
+      game.radioText = "Command: Intercept the incoming formation. Keep the lower boundary clear.";
+      game.player.x = rect.width / 2;
+      game.player.y = rect.height - 92;
+      game.bullets.length = 0;
+      game.aliens.length = 0;
+      game.particles.length = 0;
+      startOverlay.querySelector("h2").textContent = "Hold the line";
+      startOverlay.querySelector("p").textContent = "Destroy incoming ships before they cross the lower boundary. The HUD is real HTML; htmx swaps its mission panel; Pretext draws the radio text on the canvas.";
+      updateHud();
+      startOverlay.classList.remove("hidden");
+      requestPaint();
+    }
+
+    function startGame() {
+      if (game.over) {
+        resetGame();
+      }
+      game.running = true;
+      game.paused = false;
+      startOverlay.classList.add("hidden");
+      game.radioText = "Command: Weapons free. Prioritize fast scouts before they break formation.";
+      updateHud();
+    }
+
+    function togglePause() {
+      if (!game.running || game.over) return;
+      game.paused = !game.paused;
+      ui.pause.textContent = game.paused ? "Resume" : "Pause";
+      game.radioText = game.paused ? "Command: Simulation paused." : "Command: Resuming intercept course.";
+      requestPaint();
+    }
+
+    function updateHud() {
+      ui.score.textContent = String(game.score);
+      ui.wave.textContent = String(game.wave);
+      ui.hull.textContent = Math.max(0, Math.round(game.hull));
+      ui.charge.textContent = Math.round(game.charge);
+    }
+
+    function spawnAlien(width) {
+      const size = 18 + Math.random() * 16 + game.wave * 0.8;
+      const fast = Math.random() < Math.min(0.35, 0.12 + game.wave * 0.02);
+      game.aliens.push({
+        x: 40 + Math.random() * Math.max(40, width - 80),
+        y: -size,
+        r: size,
+        speed: (fast ? 92 : 55) + game.wave * 8 + Math.random() * 24,
+        sway: Math.random() * Math.PI * 2,
+        hp: fast ? 1 : 2,
+        kind: fast ? "scout" : "raider"
+      });
+    }
+
+    function fire(now) {
+      if (now - game.lastShot < 130 || game.charge < 8) return;
+      game.lastShot = now;
+      game.charge -= 8;
+      game.bullets.push({
+        x: game.player.x,
+        y: game.player.y - 24,
+        vy: -620,
+        r: 4
+      });
+    }
+
+    function explode(x, y, color, count) {
+      for (let i = 0; i < count; i += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 70 + Math.random() * 210;
+        game.particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.42 + Math.random() * 0.42,
+          age: 0,
+          color
+        });
+      }
+    }
+
+    function update(dt, now) {
+      const rect = shell.getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+
+      for (const star of game.stars) {
+        star.y += star.speed * dt;
+        if (star.y > height + 4) {
+          star.y = -4;
+          star.x = Math.random() * width;
+        }
+      }
+
+      if (!game.running || game.paused || game.over) return;
+
+      const speed = 330;
+      let ax = 0;
+      let ay = 0;
+      if (keys.left) ax -= 1;
+      if (keys.right) ax += 1;
+      if (keys.up) ay -= 1;
+      if (keys.down) ay += 1;
+      const mag = Math.hypot(ax, ay) || 1;
+      game.player.x += (ax / mag) * speed * dt;
+      game.player.y += (ay / mag) * speed * dt;
+      game.player.x = Math.max(28, Math.min(width - 28, game.player.x));
+      game.player.y = Math.max(120, Math.min(height - 40, game.player.y));
+
+      game.charge = Math.min(100, game.charge + 32 * dt);
+      if (keys.fire) fire(now);
+
+      game.spawnTimer -= dt;
+      if (game.spawnTimer <= 0) {
+        spawnAlien(width);
+        game.spawnTimer = Math.max(0.28, 1.05 - game.wave * 0.055);
+      }
+
+      for (const bullet of game.bullets) {
+        bullet.y += bullet.vy * dt;
+      }
+      game.bullets = game.bullets.filter((bullet) => bullet.y > -20);
+
+      for (const alien of game.aliens) {
+        alien.sway += dt * 2.4;
+        alien.y += alien.speed * dt;
+        alien.x += Math.sin(alien.sway) * 24 * dt;
+      }
+
+      for (const alien of game.aliens) {
+        for (const bullet of game.bullets) {
+          const dx = alien.x - bullet.x;
+          const dy = alien.y - bullet.y;
+          if (Math.hypot(dx, dy) < alien.r + bullet.r) {
+            bullet.dead = true;
+            alien.hp -= 1;
+            explode(bullet.x, bullet.y, "#f3b14b", 6);
+            if (alien.hp <= 0) {
+              alien.dead = true;
+              game.score += alien.kind === "scout" ? 80 : 120;
+              explode(alien.x, alien.y, "#36c2a5", 18);
+            }
+          }
+        }
+      }
+
+      game.bullets = game.bullets.filter((bullet) => !bullet.dead);
+
+      for (const alien of game.aliens) {
+        const playerHit = Math.hypot(alien.x - game.player.x, alien.y - game.player.y) < alien.r + game.player.r;
+        if (playerHit) {
+          alien.dead = true;
+          game.hull -= 18;
+          explode(game.player.x, game.player.y, "#ef6461", 22);
+          game.radioText = "Command: Hull impact. Keep moving and clear nearby ships.";
+        } else if (alien.y > height + alien.r) {
+          alien.dead = true;
+          game.hull -= 10;
+          game.radioText = "Command: One ship crossed the boundary. Tighten the intercept lane.";
+        }
+      }
+
+      game.aliens = game.aliens.filter((alien) => !alien.dead);
+
+      for (const particle of game.particles) {
+        particle.age += dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vy += 80 * dt;
+      }
+      game.particles = game.particles.filter((particle) => particle.age < particle.life);
+
+      const nextWaveScore = game.wave * 900;
+      if (game.score >= nextWaveScore) {
+        game.wave += 1;
+        game.radioText = "Command: Wave " + game.wave + " detected. Faster ships entering the lane.";
+        explode(width / 2, 96, "#6ea8fe", 28);
+      }
+
+      if (game.hull <= 0) {
+        game.hull = 0;
+        game.over = true;
+        game.running = false;
+        startOverlay.querySelector("h2").textContent = "Hull breached";
+        startOverlay.querySelector("p").textContent = "Final score: " + game.score + ". Reset and try to hold the line longer.";
+        startOverlay.classList.remove("hidden");
+      }
+
+      game.radioTimer += dt;
+      if (game.radioTimer > 6) {
+        game.radioTimer = 0;
+        game.radioText = game.aliens.length > 6
+          ? "Command: Dense contact cluster. Use lateral movement before firing."
+          : "Command: Lane stable. Maintain pressure and conserve charge.";
+      }
+
+      updateHud();
+    }
+
+    function drawStars(width, height) {
+      ctx.save();
+      ctx.fillStyle = "#101521";
+      ctx.fillRect(0, 0, width, height);
+      const grad = ctx.createRadialGradient(width * 0.52, height * 0.38, 60, width * 0.52, height * 0.38, width * 0.76);
+      grad.addColorStop(0, "rgba(48, 83, 134, 0.26)");
+      grad.addColorStop(0.5, "rgba(26, 38, 62, 0.25)");
+      grad.addColorStop(1, "rgba(16, 21, 33, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      for (const star of game.stars) {
+        ctx.globalAlpha = star.alpha;
+        ctx.fillStyle = "#dce8ff";
+        ctx.fillRect(star.x, star.y, star.size, star.size);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(110, 168, 254, 0.12)";
+      ctx.lineWidth = 1;
+      for (let y = 120; y < height; y += 72) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawShip() {
+      const p = game.player;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.fillStyle = "rgba(54, 194, 165, 0.24)";
+      ctx.beginPath();
+      ctx.ellipse(0, 14, 32, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(244, 247, 251, 0.96)";
+      ctx.beginPath();
+      ctx.moveTo(0, -26);
+      ctx.lineTo(20, 22);
+      ctx.lineTo(0, 12);
+      ctx.lineTo(-20, 22);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#6ea8fe";
+      ctx.beginPath();
+      ctx.moveTo(0, -12);
+      ctx.lineTo(8, 10);
+      ctx.lineTo(-8, 10);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#f3b14b";
+      ctx.beginPath();
+      ctx.moveTo(-8, 22);
+      ctx.lineTo(0, 36 + Math.random() * 6);
+      ctx.lineTo(8, 22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawAliens() {
+      for (const alien of game.aliens) {
+        ctx.save();
+        ctx.translate(alien.x, alien.y);
+        ctx.rotate(Math.sin(alien.sway) * 0.18);
+        ctx.fillStyle = alien.kind === "scout" ? "#ef6461" : "#b488ff";
+        ctx.beginPath();
+        ctx.moveTo(0, -alien.r);
+        ctx.quadraticCurveTo(alien.r * 1.1, -alien.r * 0.1, alien.r * 0.72, alien.r * 0.7);
+        ctx.quadraticCurveTo(0, alien.r * 1.08, -alien.r * 0.72, alien.r * 0.7);
+        ctx.quadraticCurveTo(-alien.r * 1.1, -alien.r * 0.1, 0, -alien.r);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
+        ctx.beginPath();
+        ctx.arc(-alien.r * 0.28, -alien.r * 0.08, alien.r * 0.13, 0, Math.PI * 2);
+        ctx.arc(alien.r * 0.28, -alien.r * 0.08, alien.r * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawBullets() {
+      ctx.save();
+      ctx.fillStyle = "#f3b14b";
+      ctx.shadowColor = "#f3b14b";
+      ctx.shadowBlur = 12;
+      for (const bullet of game.bullets) {
+        ctx.beginPath();
+        ctx.roundRect(bullet.x - 3, bullet.y - 14, 6, 18, 4);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      ctx.save();
+      for (const particle of game.particles) {
+        const alpha = 1 - particle.age / particle.life;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, 2.4 + 3 * alpha, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function wrapTextCanvas(text, maxWidth) {
+      const words = text.split(/(\s+)/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      for (const word of words) {
+        const next = line + word;
+        if (line && ctx.measureText(next).width > maxWidth) {
+          lines.push(line.trimEnd());
+          line = word.trimStart();
+        } else {
+          line = next;
+        }
+      }
+      if (line) lines.push(line.trimEnd());
+      return lines.map((item) => ({ text: item }));
+    }
+
+    function radioLines(text, width, font, lineHeight) {
+      if (!pretextApi) return wrapTextCanvas(text, width);
+      const prepared = pretextApi.prepareWithSegments(text, font, { whiteSpace: "pre-wrap" });
+      return pretextApi.layoutWithLines(prepared, width, lineHeight).lines;
+    }
+
+    function drawRadio(width, height) {
+      const maxWidth = Math.min(520, width - 40);
+      const font = "15px system-ui, sans-serif";
+      const lineHeight = 21;
+      const lines = radioLines(game.radioText, maxWidth - 28, font, lineHeight);
+      const boxHeight = 48 + lines.length * lineHeight;
+      const x = 20;
+      const y = height - boxHeight - 22;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(8, 13, 22, 0.68)";
+      ctx.strokeStyle = "rgba(110, 168, 254, 0.28)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x, y, maxWidth, boxHeight, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = pretextApi ? "#36c2a5" : "#f3b14b";
+      ctx.font = "700 12px system-ui, sans-serif";
+      ctx.fillText(pretextApi ? "PRETEXT RADIO" : "CANVAS RADIO", x + 14, y + 24);
+
+      ctx.fillStyle = "#dbe7f6";
+      ctx.font = font;
+      lines.forEach((line, index) => {
+        ctx.fillText(line.text, x + 14, y + 50 + index * lineHeight);
+      });
+      ctx.restore();
+    }
+
+    function drawHud(width, height) {
+      if (!useDrawElement) return;
+      ctx.save();
+      try {
+        const transform = ctx.drawElementImage(hud, 16, 16);
+        syncHudTransform(transform);
+      } catch (error) {
+        useDrawElement = false;
+        shell.classList.add("dom-overlay-mode");
+        apiMode.textContent = "DOM overlay";
+        apiMode.classList.add("fallback");
+        syncHudTransform();
+        console.warn("drawElementImage failed; switched to DOM overlay mode.", error);
+      }
+      ctx.restore();
+    }
+
+    function drawGameState(width, height) {
+      if (!game.running && !game.over) {
+        ctx.save();
+        ctx.fillStyle = "rgba(231, 237, 247, 0.76)";
+        ctx.font = "700 18px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Press Launch", width / 2, height * 0.42);
+        ctx.restore();
+      }
+
+      if (game.paused) {
+        ctx.save();
+        ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "#e7edf7";
+        ctx.font = "700 28px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Paused", width / 2, height / 2);
+        ctx.restore();
+      }
+    }
+
+    function paint() {
+      const ratio = window.devicePixelRatio || 1;
+      const width = canvas.width / ratio;
+      const height = canvas.height / ratio;
+
+      ctx.reset();
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawStars(width, height);
+      drawBullets();
+      drawAliens();
+      drawShip();
+      drawParticles();
+      drawRadio(width, height);
+      drawHud(width, height);
+      drawGameState(width, height);
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.033, (now - lastTime) / 1000);
+      lastTime = now;
+      update(dt, now);
+      if (useDrawElement) {
+        canvas.requestPaint();
+      } else {
+        paint();
+      }
+      window.requestAnimationFrame(frame);
+    }
+
+    function keyFromCode(code) {
+      if (code === "ArrowLeft" || code === "KeyA") return "left";
+      if (code === "ArrowRight" || code === "KeyD") return "right";
+      if (code === "ArrowUp" || code === "KeyW") return "up";
+      if (code === "ArrowDown" || code === "KeyS") return "down";
+      if (code === "Space") return "fire";
+      return null;
+    }
+
+    function setKey(code, down) {
+      const key = keyFromCode(code);
+      if (!key) return false;
+      keys[key] = down;
+      return true;
+    }
+
+    function bindTouchControls() {
+      document.querySelectorAll("[data-key]").forEach((button) => {
+        const key = button.dataset.key;
+        const set = (down) => {
+          keys[key] = down;
+          if (key === "fire" && down && !game.running) startGame();
+        };
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          button.setPointerCapture(event.pointerId);
+          set(true);
+        });
+        button.addEventListener("pointerup", () => set(false));
+        button.addEventListener("pointercancel", () => set(false));
+        button.addEventListener("pointerleave", () => set(false));
+      });
+    }
+
+    function setup() {
+      if (!useDrawElement) {
+        shell.classList.add("dom-overlay-mode");
+        apiMode.textContent = "DOM overlay";
+        apiMode.classList.add("fallback");
+      } else {
+        apiMode.textContent = "HTML-in-Canvas";
+      }
+
+      canvas.onpaint = paint;
+      ui.start.addEventListener("click", startGame);
+      ui.overlayStart.addEventListener("click", startGame);
+      ui.pause.addEventListener("click", togglePause);
+      ui.reset.addEventListener("click", resetGame);
+
+      document.addEventListener("keydown", (event) => {
+        if (event.code === "KeyP") {
+          togglePause();
+          return;
+        }
+        if (setKey(event.code, true)) {
+          event.preventDefault();
+          if (!game.running && event.code === "Space") startGame();
+        }
+      });
+
+      document.addEventListener("keyup", (event) => {
+        if (setKey(event.code, false)) event.preventDefault();
+      });
+
+      document.body.addEventListener("htmx:afterSwap", () => {
+        game.radioText = "Command: Mission panel swapped through htmx. Canvas repaint confirmed.";
+        requestPaint();
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+      bindTouchControls();
+      resizeCanvas();
+      resetGame();
+      loadPretext();
+      window.requestAnimationFrame(frame);
+    }
+
+    setup();
+  </script>
+</body>
+</html>
